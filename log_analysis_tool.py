@@ -58,10 +58,10 @@ def logFileManage(logFilePath, bleBinPath, wifiBinPath, bleAddrOffset, wifiAddrO
         print(str(j + 1) + '|' + txt_result, file=txtFile)
         # excel 文件处理
         if MODE_BLE in result:
-            if binVersion >= 36:
-                info_result = v36InfoExtraction(result)
-            else:
+            if 0 <= binVersion < 36:
                 info_result = infoExtraction(result)
+            else:
+                info_result = v36InfoExtraction(result)
             if info_result != []:
                 infoExcelRow += 1
                 info_sheet.write(infoExcelRow, 0, infoExcelRow)
@@ -339,6 +339,9 @@ def v36InfoExtraction(str):
                 ONLINE_STATE = 2
         else:
             if MATCH_STATE == 1:
+                if 'offline measure,identify fat,res:' in str:
+                    INFO_DATA[6] = int(str_temp[8], 16) / 10  # res
+                # if 'run_identify_flag:' in str or '':     # 1.7版本是写的这条判断语句，不知道为什么，可能写错了
                 if 'run_identify_flag:' in str:
                     # 1 没有WIFI权限的用户
                     # 2 识别到唯一用户

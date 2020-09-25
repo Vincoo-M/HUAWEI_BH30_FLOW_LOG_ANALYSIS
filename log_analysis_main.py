@@ -10,7 +10,7 @@ from log_analysis_tool import logFileManage
 # app information
 APP_NAME = 'FLOW LOG Analysis'
 APP_VERSION = '1.8_Beta'
-BUILT_DATE = 'Built on ' + time.strftime('%b %d, %Y', time.localtime())
+BUILT_DATE = 'Built on Sep 25, 2020'
 POWERED_BY = 'Powered by: Vincoo'
 EMAIL = 'Email: movincoo@163.com | matengnan@ebelter.com'
 
@@ -217,14 +217,16 @@ class MainWindow(QMainWindow, Ui_main):
         self.setting.setValue('LastFilePath', path)
 
     def getBleAddrOffset(self, version):
-        if 31 <= version < 51:
-            offset = '0x1FFEE920'
+        if 0 <= version < 28:
+            offset = DEFAULT_BLE_ADDROFFSET
         elif 28 <= version < 31:
             offset = '0x1FFEED90'
-        elif version >= 51:
+        elif 31 <= version < 51:
+            offset = '0x1FFEE920'
+        elif 51 <= version < 53:
             offset = '0x1FFEE890'
         else:
-            offset = DEFAULT_BLE_ADDROFFSET
+            offset = '0x1FFEE880'
         self.le_ble_addr_offset.setText(offset)
         return offset
 
