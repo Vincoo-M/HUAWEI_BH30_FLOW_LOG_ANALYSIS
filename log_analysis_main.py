@@ -6,11 +6,13 @@ from PyQt5.Qt import *
 import sys
 from UI.main_ui import Ui_main
 from log_analysis_tool import logFileManage
+import logging
+import constant
 
 # app information
 APP_NAME = 'FLOW LOG Analysis'
-APP_VERSION = '1.8_Beta'
-BUILT_DATE = 'Built on Sep 25, 2020'
+APP_VERSION = '1.9_Beta'
+BUILT_DATE = 'Built on Sep 28, 2020'
 POWERED_BY = 'Powered by: Vincoo'
 EMAIL = 'Email: movincoo@163.com | matengnan@ebelter.com'
 
@@ -18,6 +20,9 @@ MREGE_TEMP_FILE_NAME = './mrege_temp_file'
 FONT_LABEL = '微软雅黑'
 DEFAULT_BLE_ADDROFFSET = '0x1FFEED80'
 DEFAULT_WIFI_ADDROFFSET = '0x40210000'
+
+# log config
+logging.basicConfig(level=constant.DEBUG, format=constant.LOG_FORMAT, datefmt=constant.DATE_FORMAT)
 
 
 class MainWindow(QMainWindow, Ui_main):
@@ -347,9 +352,10 @@ class AnalysisThread(QThread):
             traceback.print_exc()
             # print(repr(e))
 
-
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     mainWin = MainWindow()
     mainWin.show()
+    logging.info('Version: %s' % APP_VERSION)
+    logging.info('Time: %s' % time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()))
     sys.exit(app.exec_())

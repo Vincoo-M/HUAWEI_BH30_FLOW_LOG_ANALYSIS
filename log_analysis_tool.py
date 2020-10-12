@@ -61,7 +61,7 @@ def logFileManage(logFilePath, bleBinPath, wifiBinPath, bleAddrOffset, wifiAddrO
             if 0 <= binVersion < 36:
                 info_result = infoExtraction(result)
             else:
-                info_result = v36InfoExtraction(result)
+                info_result = v36InfoExtraction(result, j+1, logNumber)
             if info_result != []:
                 infoExcelRow += 1
                 info_sheet.write(infoExcelRow, 0, infoExcelRow)
@@ -275,19 +275,18 @@ def infoExtraction(str):
             LINE_FLAG = 0
     return info
 
-def v36InfoExtraction(str):
+def v36InfoExtraction(str,count,total):
     info = []
     str_temp = str.split('|')
     global ONLINE_STATE
     global INFO_DATA
     global MATCH_STATE
-    if 'weight match' in str:
+    if 'weight match:' in str:
         INFO_DATA = [''] * 13
         INFO_DATA[5] = int(str_temp[8], 16) / 100  # weight
         match = int(str_temp[9], 16)
         INFO_DATA[0] = str_temp[3]  # date
         INFO_DATA[1] = str_temp[4]  # time
-
         INFO_DATA[12] = '离线'    # mode
         if match == 0xffffffff:
             INFO_DATA[11] = '匹配到唯一用户'
@@ -321,7 +320,7 @@ def v36InfoExtraction(str):
 
 
     if MATCH_STATE == -1 or MATCH_STATE == 1 or ONLINE_STATE == 1:
-        if 'sex:' in str:
+        if 'sex:' in str and 'age:' in str and 'high:' in str:
             INFO_DATA[0] = str_temp[3]  # date
             INFO_DATA[1] = str_temp[4]  # time
             INFO_DATA[2] = int(str_temp[10], 16) / 10  # high
@@ -365,9 +364,17 @@ def v36InfoExtraction(str):
                     MATCH_STATE = 0
                     info = INFO_DATA
                     INFO_DATA = [''] * 13
+            if MATCH_STATE == -1 and 'zero:' in str and 'filter:' in str and 'origin:' in str:
+                MATCH_STATE = 0
+                info = INFO_DATA
+                INFO_DATA = [''] * 13
+            elif MATCH_STATE == -1 and count == total:
+                MATCH_STATE = 0
+                info = INFO_DATA
+                INFO_DATA = [''] * 13
 
     if MATCH_STATE == -2 or MATCH_STATE == 2 or ONLINE_STATE == 2:
-        if 'res:' in str:
+        if 'res:' in str and 'last:' in str:
             INFO_DATA[6] = int(str_temp[8], 16) / 10  # res
             INFO_DATA[9] = int(str_temp[9], 16) / 100  # last weight
             INFO_DATA[10] = int(str_temp[10], 16) / 10  # last bfr
