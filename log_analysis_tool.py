@@ -6,8 +6,11 @@ import flow_log_analysis
 import xlwt
 
 info_header = ['序号', '日期', '时间', '身高', '性别', '年龄', '体重', '阻抗', '体脂率', 'time interval', 'last weight', 'last bfr', '用户识别',
-          '测量模式']
-adc_header = ['日期', '时间', 'zero','filter','origin']
+               '测量模式']
+info_header_v63 = ['序号', '日期', '时间', '身高', '性别', '年龄', '体重', '真实阻抗', '真实体脂率', '历史体脂率', '平滑阻抗', '平滑体脂率', '骨骼肌', '历史体重',
+                   '历史体重时间', '用户识别', '测量模式']
+
+adc_header = ['日期', '时间', 'zero', 'filter', 'origin']
 INFO_DATA = [''] * 13
 MULTI_USER_FLAG = False
 ONLINE_STATE = 0
@@ -33,7 +36,7 @@ def getFileLogNumber(file):
     return fileSize // logLength
 
 
-def logFileManage(logFilePath, bleBinPath, wifiBinPath, bleAddrOffset, wifiAddrOffset, analysis_signal, total_signal,binVersion):
+def logFileManage(logFilePath, bleBinPath, wifiBinPath, bleAddrOffset, wifiAddrOffset, analysis_signal, total_signal, binVersion):
     f_logFile_obj = open(logFilePath, 'rb')
     f_bleBin_obj = open(bleBinPath, 'rb')
     f_wifiBin_obj = open(wifiBinPath, 'rb')
@@ -44,7 +47,10 @@ def logFileManage(logFilePath, bleBinPath, wifiBinPath, bleAddrOffset, wifiAddrO
     logLength = getLogLength(f_logFile)
     logNumber = getFileLogNumber(f_logFile)
     log = [0] * logLength
-    excelFile, info_sheet, adc_sheet = createExcel(info_header,adc_header)
+    if 0 <= binVersion < 63:
+        excelFile, info_sheet, adc_sheet = createExcel(info_header, adc_header)
+    else:
+        excelFile, info_sheet, adc_sheet = createExcel(info_header_v63, adc_header)
     infoExcelRow = 0
     adcExcelRow = 0
     fileName = getNewFilePath()
@@ -53,15 +59,17 @@ def logFileManage(logFilePath, bleBinPath, wifiBinPath, bleAddrOffset, wifiAddrO
     for j in range(0, logNumber):
         for i in range(0, logLength):
             log[i] = f_logFile[j * logLength + i]
-        result,txt_result = logAnalysis(log, f_bleBin, f_wifiBin, bleAddrOffset, wifiAddrOffset)
+        result, txt_result = logAnalysis(log, f_bleBin, f_wifiBin, bleAddrOffset, wifiAddrOffset)
         # txt 文件处理
         print(str(j + 1) + '|' + txt_result, file=txtFile)
         # excel 文件处理
         if MODE_BLE in result:
             if 0 <= binVersion < 36:
                 info_result = infoExtraction(result)
+            elif 36 <= binVersion < 63:
+                info_result = v36InfoExtraction(result, j + 1, logNumber)
             else:
-                info_result = v36InfoExtraction(result, j+1, logNumber)
+                info_result = v63InfoExtraction(result, j + 1, logNumber)
             if info_result != []:
                 infoExcelRow += 1
                 info_sheet.write(infoExcelRow, 0, infoExcelRow)
@@ -70,8 +78,8 @@ def logFileManage(logFilePath, bleBinPath, wifiBinPath, bleAddrOffset, wifiAddrO
         if 'zero:' in result:
             adcExcelRow += 1
             adc_list = adcExtraction(result)
-            for index,val in enumerate(adc_list):
-                adc_sheet.write(adcExcelRow,index,val)
+            for index, val in enumerate(adc_list):
+                adc_sheet.write(adcExcelRow, index, val)
         analysis_signal.emit(j)
     txtFile.flush()
     txtFile.close()
@@ -100,10 +108,10 @@ def logAnalysis(logArray, bleFile, wifiFile, bleAddrOffset, wifiAddrOffset):
         print('ERROR LOG')
     elif header == LOG_HEADER_FLOW:
         new_log_array = struct.unpack('>BBBBIIIIIII', byteLogArray)
-        result,txt_result = flowLogAnalysis(new_log_array, bleFile, wifiFile, bleAddrOffset, wifiAddrOffset)
+        result, txt_result = flowLogAnalysis(new_log_array, bleFile, wifiFile, bleAddrOffset, wifiAddrOffset)
     else:
         print('HEADER ERROR')
-    return result,txt_result
+    return result, txt_result
 
 
 def flowLogAnalysis(logArray, bleFile, wifiFile, bleAddrOffset, wifiAddrOffset):
@@ -125,12 +133,12 @@ def flowLogAnalysis(logArray, bleFile, wifiFile, bleAddrOffset, wifiAddrOffset):
     para5 = logArray[10]
     str_addr_result = addrResultFormat(str_addr_result, para2, para3, para4, para5)
     result = '%s|%s|%s|%s|%s|%s|%s|%s|0x%x|0x%x|0x%x|0x%x|' % (
-    str_header, str_level, str_mode, str_data, str_time, str_addr_result, str_index, str_line_number, para2, para3,
-    para4, para5)
+        str_header, str_level, str_mode, str_data, str_time, str_addr_result, str_index, str_line_number, para2, para3,
+        para4, para5)
     txt_result = '%s|%s|%s|%s|%s|%s| File index = %s | Line = %s | Para2 = 0x%x | Para3 = 0x%x | Para4 = 0x%x | Para5 = 0x%x' % (
-    str_header, str_level, str_mode, str_data, str_time, str_addr_result, str_index, str_line_number, para2, para3,
-    para4, para5)
-    return result,txt_result
+        str_header, str_level, str_mode, str_data, str_time, str_addr_result, str_index, str_line_number, para2, para3,
+        para4, para5)
+    return result, txt_result
 
 
 # LOG HEADER ANALYSIS
@@ -173,7 +181,7 @@ def addrResultFormat(str, p2, p3, p4, p5):
     return string
 
 
-def createExcel(info_header,adc_header):
+def createExcel(info_header, adc_header):
     excelFile = xlwt.Workbook(encoding='utf-8', style_compression=0)
     info_sheet = excelFile.add_sheet('information')
     adc_sheet = excelFile.add_sheet('adc')
@@ -181,7 +189,7 @@ def createExcel(info_header,adc_header):
         info_sheet.write(0, i, val)
     for i, val in enumerate(adc_header):
         adc_sheet.write(0, i, val)
-    return excelFile, info_sheet,adc_sheet
+    return excelFile, info_sheet, adc_sheet
 
 
 def infoExtraction(str):
@@ -193,9 +201,9 @@ def infoExtraction(str):
     if 'weight match' in str:
 
         LINE_FLAG = 1
-        INFO_DATA[12] = '离线'    # mode
+        INFO_DATA[12] = '离线'  # mode
         if ',' in str:
-            match = int(str_temp[9], 16)    # 在BLE OTA版本31之后，此处会打印出2个数值，后一个才为用户识别标识
+            match = int(str_temp[9], 16)  # 在BLE OTA版本31之后，此处会打印出2个数值，后一个才为用户识别标识
         else:
             match = int(str_temp[8], 16)
         MULTI_USER_FLAG = False
@@ -213,7 +221,7 @@ def infoExtraction(str):
             LINE_FLAG = 0
     elif 'online' in str:
         LINE_FLAG = -1
-        INFO_DATA[12] = '在线'    # mode
+        INFO_DATA[12] = '在线'  # mode
         INFO_DATA[11] = '/'
 
     if (LINE_FLAG == 1 or LINE_FLAG == -1) and 'sex:' in str:
@@ -275,7 +283,8 @@ def infoExtraction(str):
             LINE_FLAG = 0
     return info
 
-def v36InfoExtraction(str,count,total):
+
+def v36InfoExtraction(str, count, total):
     info = []
     str_temp = str.split('|')
     global ONLINE_STATE
@@ -287,7 +296,7 @@ def v36InfoExtraction(str,count,total):
         match = int(str_temp[9], 16)
         INFO_DATA[0] = str_temp[3]  # date
         INFO_DATA[1] = str_temp[4]  # time
-        INFO_DATA[12] = '离线'    # mode
+        INFO_DATA[12] = '离线'  # mode
         if match == 0xffffffff:
             INFO_DATA[11] = '匹配到唯一用户'
             MATCH_STATE = -1
@@ -315,9 +324,8 @@ def v36InfoExtraction(str,count,total):
         INFO_DATA = [''] * 13
 
         ONLINE_STATE = 1
-        INFO_DATA[12] = '在线'    # mode
+        INFO_DATA[12] = '在线'  # mode
         INFO_DATA[11] = '/'
-
 
     if MATCH_STATE == -1 or MATCH_STATE == 1 or ONLINE_STATE == 1:
         if 'sex:' in str and 'age:' in str and 'high:' in str:
@@ -379,7 +387,7 @@ def v36InfoExtraction(str,count,total):
             INFO_DATA[9] = int(str_temp[9], 16) / 100  # last weight
             INFO_DATA[10] = int(str_temp[10], 16) / 10  # last bfr
             INFO_DATA[8] = int(str_temp[11], 16)  # time interval
-            if int(str_temp[8], 16) == 0:       # res=0,下面不会打印体脂和run_identify_flag
+            if int(str_temp[8], 16) == 0:  # res=0,下面不会打印体脂和run_identify_flag
                 INFO_DATA[7] = 'null'
                 MATCH_STATE = 0
                 ONLINE_STATE = 0
@@ -409,17 +417,191 @@ def v36InfoExtraction(str,count,total):
                 INFO_DATA = [''] * 13
     return info
 
+
+def v63InfoExtraction(str, count, total):
+    info = []
+    # 表示离线测量的头
+    str_temp = str.split('|')
+    global ONLINE_STATE
+    global INFO_DATA
+    global MATCH_STATE
+    if 'weight match:' in str:
+        INFO_DATA = [''] * 16
+        INFO_DATA[5] = int(str_temp[8], 16) / 100  # weight
+        match = int(str_temp[9], 16)
+        INFO_DATA[0] = str_temp[3]  # date
+        INFO_DATA[1] = str_temp[4]  # time
+        INFO_DATA[15] = '离线'  # mode
+        if match == 0xffffffff:
+            INFO_DATA[14] = '体重匹配到唯一用户'
+            MATCH_STATE = -1
+        elif match == 0x0:
+            INFO_DATA[14] = '体重未匹配到用户'
+            info = INFO_DATA
+            INFO_DATA = [''] * 16
+            # 这里如果是0，后面run_identify_flag是不是一定是3
+        elif match != 0xffffffff and match != 0xfffffffe and match >= 0x01:
+            INFO_DATA[14] = '体重多用户冲突（体重）'
+            MATCH_STATE = 1
+        elif match == 0xfffffffe:
+            INFO_DATA[14] = '体重没有绑定WiFi账号'
+            info = INFO_DATA
+            INFO_DATA = [''] * 16
+            # 这里如果是-2，后面run_identify_flag是不是一定是1
+        else:
+            INFO_DATA[14] = '体重解析工具出错或者bin文件错误'
+            info = INFO_DATA
+            INFO_DATA = [''] * 16
+
+    elif 'online sex:' in str:
+        # 防止出现已经找weight match头，但是中间出现 online sex, 所以丢掉上条weight match的数据
+        MATCH_STATE = 0
+        INFO_DATA = [''] * 16
+
+        ONLINE_STATE = 1
+        INFO_DATA[0] = str_temp[3]  # date
+        INFO_DATA[1] = str_temp[4]  # time
+        INFO_DATA[15] = '在线'  # mode
+        INFO_DATA[14] = '/'
+    if MATCH_STATE == -1 or MATCH_STATE == 1 or ONLINE_STATE == 1:
+        if 'sex:' in str and 'age:' in str and 'high:' in str and 'weight:' in str:
+            INFO_DATA[2] = int(str_temp[10], 16) / 10  # high
+            if int(str_temp[8], 16) == 0x0:  # sex
+                INFO_DATA[3] = '女'
+            else:
+                INFO_DATA[3] = '男'
+            INFO_DATA[4] = int(str_temp[9], 16)  # age
+            INFO_DATA[5] = int(str_temp[11], 16) / 100  # weight
+            if MATCH_STATE == -1:
+                MATCH_STATE = -2
+            if MATCH_STATE == 1:
+                MATCH_STATE = 2
+            if ONLINE_STATE == 1:
+                ONLINE_STATE = 2
+        else:
+            if MATCH_STATE == 1:
+                if 'offline measure,identify fat,res:' in str:
+                    INFO_DATA[6] = int(str_temp[8], 16) / 10  # res
+                # if 'run_identify_flag:' in str or '':     # 1.7版本是写的这条判断语句，不知道为什么，可能写错了
+                if 'run_identify_flag:' in str:
+                    # 1 没有WIFI权限的用户
+                    # 2 识别到唯一用户
+                    # 3 未匹配到用户
+                    # 4 多用户冲突
+                    identify = int(str_temp[8], 16)
+                    if identify == 1:
+                        INFO_DATA[14] = '没有WIFI权限的用户'
+                    elif identify == 2:
+                        INFO_DATA[14] = '识别到唯一用户'
+                    elif identify == 3:
+                        INFO_DATA[14] = '未匹配到用户'
+                    elif identify == 4:
+                        INFO_DATA[14] = '多用户冲突'
+                    else:
+                        INFO_DATA[14] = '解析工具出错或者bin文件出错，identify不等于1，2，3，4'
+                    MATCH_STATE = 0
+                    info = INFO_DATA
+                    INFO_DATA = [''] * 16
+                # if 'status' in str:  #
+                #     MATCH_STATE = 0
+                #     info = INFO_DATA
+                #     INFO_DATA = [''] * 13
+            # if MATCH_STATE == -1 and 'zero:' in str and 'filter:' in str and 'origin:' in str:
+            #     MATCH_STATE = 0
+            #     info = INFO_DATA
+            #     INFO_DATA = [''] * 16
+            if MATCH_STATE == -1 or MATCH_STATE == 1:
+                if 'unlock' in str:
+                    MATCH_STATE = 0
+                    info = INFO_DATA
+                    INFO_DATA = [''] * 16
+            elif MATCH_STATE == -1 and count == total:
+                MATCH_STATE = 0
+                info = INFO_DATA
+                INFO_DATA = [''] * 16
+    if MATCH_STATE == -2 or MATCH_STATE == 2 or ONLINE_STATE == 2:
+        if 'res:' in str and 'last:' in str:
+            INFO_DATA[6] = int(str_temp[8], 16) / 10  # res
+            INFO_DATA[12] = int(str_temp[9], 16) / 100  # last weight
+            INFO_DATA[8] = int(str_temp[10], 16) / 10  # last bfr
+            INFO_DATA[13] = int(str_temp[11], 16)  # time interval
+            if int(str_temp[8], 16) == 0:  # res=0,下面不会打印体脂和run_identify_flag
+                INFO_DATA[7] = 'null'
+                MATCH_STATE = 0
+                ONLINE_STATE = 0
+                info = INFO_DATA
+                INFO_DATA = [''] * 16
+            else:
+                if MATCH_STATE == -2:
+                    MATCH_STATE = -3
+                if MATCH_STATE == 2:
+                    MATCH_STATE = 3
+                if ONLINE_STATE == 2:
+                    ONLINE_STATE = 3
+
+    if MATCH_STATE == -3 or MATCH_STATE == 3 or ONLINE_STATE == 3:  # 确认多用户冲突会不会打印体脂率
+        if 'smooth:' in str and 'user_index:' in str and 'res_diff_time(s):' in str and 'smm:' in str:
+            res_diff_time = int(str_temp[10], 16) / 10  # 历史阻抗时间间隔s
+            smm = int(str_temp[11], 16) / 10  # 骨骼肌
+            INFO_DATA[11] = smm
+            if MATCH_STATE == -3:
+                MATCH_STATE = -4
+                # info = INFO_DATA
+                # INFO_DATA = [''] * 16
+            if MATCH_STATE == 3:
+                MATCH_STATE = 4
+            if ONLINE_STATE == 3:
+                ONLINE_STATE = 4
+                # info = INFO_DATA
+                # INFO_DATA = [''] * 16
+    if MATCH_STATE == -4 or MATCH_STATE == 4 or ONLINE_STATE == 4:
+        if 'real_res:' in str and 'real_fat:' in str and 'smooth_res:' in str and 'smooth_fat:' in str:
+            real_res = int(str_temp[8], 16) / 10  # 真实阻抗
+            real_fat = int(str_temp[9], 16) / 10  # 真实体脂率
+            smooth_res = int(str_temp[10], 16) / 10  # 平滑阻抗
+            smooth_fat = int(str_temp[11], 16) / 10  # 平滑体脂率
+            INFO_DATA[6] = real_res
+            INFO_DATA[7] = real_fat
+            INFO_DATA[9] = smooth_res
+            INFO_DATA[10] = smooth_fat
+            if MATCH_STATE == -4:
+                MATCH_STATE = -5
+            if MATCH_STATE == 4:
+                MATCH_STATE = 5
+            if ONLINE_STATE == 4:
+                ONLINE_STATE = 0
+                info = INFO_DATA
+                INFO_DATA = [''] * 16
+    if MATCH_STATE == -5 or MATCH_STATE == 5:
+        if 'run_identify_flag:' in str:
+            identify = int(str_temp[8], 16)  # 体脂识别
+            if identify == 1:
+                INFO_DATA[14] = '没有WIFI权限的用户'
+            elif identify == 2:
+                INFO_DATA[14] = '识别到唯一用户'
+            elif identify == 3:
+                INFO_DATA[14] = '未匹配到用户'
+            elif identify == 4:
+                INFO_DATA[14] = '多用户冲突'
+            else:
+                INFO_DATA[14] = '解析工具出错或者bin文件出错，identify不等于1，2，3，4'
+            MATCH_STATE = 0
+            info = INFO_DATA
+            INFO_DATA = [''] * 16
+    return info
+
+
 def adcExtraction(str):
     str_temp = str.split('|')
-    adc_list = [str_temp[3],str_temp[4],int(str_temp[8], 16),int(str_temp[9], 16),int(str_temp[10], 16)]
+    adc_list = [str_temp[3], str_temp[4], int(str_temp[8], 16), int(str_temp[9], 16), int(str_temp[10], 16)]
     return adc_list
+
 
 def getNewFilePath():
     path = './OutFile/'
     if not os.path.exists(path):
         os.mkdir(path)
     return path + "out_log%s" % (datetime.datetime.now().strftime("-%Y-%m-%d-%H-%M-%S"))
-
 
 # header = ['序号','日期','时间','身高','性别','年龄','体重','阻抗','脂肪率','time interval','last weight','last bfr','用户识别','测量模式']
 # sex:0,age:25,high:1650,weight:5090  8,9,10,11

@@ -11,8 +11,8 @@ import constant
 
 # app information
 APP_NAME = 'FLOW LOG Analysis'
-APP_VERSION = '1.9_Beta'
-BUILT_DATE = 'Built on Sep 28, 2020'
+APP_VERSION = '1.10_Beta'
+BUILT_DATE = 'Built on Oct 12, 2020'
 POWERED_BY = 'Powered by: Vincoo'
 EMAIL = 'Email: movincoo@163.com | matengnan@ebelter.com'
 
@@ -230,8 +230,10 @@ class MainWindow(QMainWindow, Ui_main):
             offset = '0x1FFEE920'
         elif 51 <= version < 53:
             offset = '0x1FFEE890'
-        else:
+        elif 53 <= version < 63:
             offset = '0x1FFEE880'
+        else:
+            offset = '0x1FFEE850'
         self.le_ble_addr_offset.setText(offset)
         return offset
 
@@ -351,6 +353,7 @@ class AnalysisThread(QThread):
             self.analysis_signal.emit(-2)
             traceback.print_exc()
             # print(repr(e))
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
