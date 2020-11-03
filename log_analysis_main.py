@@ -6,13 +6,12 @@ from PyQt5.Qt import *
 import sys
 from UI.main_ui import Ui_main
 from log_analysis_tool import logFileManage
-import logging
-import constant
+from logger import Logger
 
 # app information
 APP_NAME = 'FLOW LOG Analysis'
-APP_VERSION = '1.10_Beta'
-BUILT_DATE = 'Built on Oct 12, 2020'
+APP_VERSION = '1.11_Beta'
+BUILT_DATE = 'Built on Oct 29, 2020'
 POWERED_BY = 'Powered by: Vincoo'
 EMAIL = 'Email: movincoo@163.com | matengnan@ebelter.com'
 
@@ -20,9 +19,9 @@ MREGE_TEMP_FILE_NAME = './mrege_temp_file'
 FONT_LABEL = '微软雅黑'
 DEFAULT_BLE_ADDROFFSET = '0x1FFEED80'
 DEFAULT_WIFI_ADDROFFSET = '0x40210000'
+CONFIG_OFFSET_PATH = "./config_offset.ini"
 
-# log config
-logging.basicConfig(level=constant.DEBUG, format=constant.LOG_FORMAT, datefmt=constant.DATE_FORMAT)
+LOG = Logger(level=Logger.DEBUG).get_logger()
 
 
 class MainWindow(QMainWindow, Ui_main):
@@ -34,7 +33,7 @@ class MainWindow(QMainWindow, Ui_main):
         self.setMinimumSize(self.width(), self.height())
         self.setWindowTitle(APP_NAME + '_' + APP_VERSION)
         self.logpath = ''
-        self.setting = None
+        self.config_setting = None
         self.initView()
         self.bleVersion = 0
         # 测试使用
@@ -172,7 +171,7 @@ class MainWindow(QMainWindow, Ui_main):
                 for i, val in enumerate(self.logpath):
                     self.list_file_path.addItem(str(i + 1) + ' | ' + val)
             except Exception as e:
-                print(repr(e))
+                LOG.error(repr(e))
 
     def selectBleBinFile(self):
         lastPath = self.getConfigInfo()
@@ -212,28 +211,46 @@ class MainWindow(QMainWindow, Ui_main):
             self.le_wifi_binfile.setText(path)
 
     def getConfigInfo(self):
-        self.setting = QSettings("./Setting.ini", QSettings.IniFormat)
-        path = str(self.setting.value('LastFilePath'))
+        self.config_setting = QSettings("./config_setting.ini", QSettings.IniFormat)
+        path = str(self.config_setting.value('LastFilePath'))
         if path is None or path == '':
             return './'
         return path
 
     def setConfigInfo(self, path):
-        self.setting.setValue('LastFilePath', path)
+        self.config_setting.setValue('LastFilePath', path)
+
+    def setOffsetConfigInfo(self):
+        LOG.debug('创建默认Config')
+        self.config_offset.setValue('0', '0x1FFEED80')
+        self.config_offset.setValue('28', '0x1FFEED90')
+        self.config_offset.setValue('31', '0x1FFEE920')
+        self.config_offset.setValue('51', '0x1FFEE890')
+        self.config_offset.setValue('53', '0x1FFEE880')
+        self.config_offset.setValue('63', '0x1FFEE850')
+        self.config_offset.setValue('81', '0x1FFEE8A0')
 
     def getBleAddrOffset(self, version):
-        if 0 <= version < 28:
-            offset = DEFAULT_BLE_ADDROFFSET
-        elif 28 <= version < 31:
-            offset = '0x1FFEED90'
-        elif 31 <= version < 51:
-            offset = '0x1FFEE920'
-        elif 51 <= version < 53:
-            offset = '0x1FFEE890'
-        elif 53 <= version < 63:
-            offset = '0x1FFEE880'
+        offset = ''
+        self.config_offset = QSettings(CONFIG_OFFSET_PATH, QSettings.IniFormat)
+        key_list = list(map(int, self.config_offset.allKeys()))
+        if len(key_list) == 0:
+            # 创建默认config
+            self.setOffsetConfigInfo()
+            key_list = list(map(int, self.config_offset.allKeys()))
+        key_list.sort()
+        LOG.debug('列表sort之后的key值%s' % key_list)
+        if version in key_list:
+            offset = self.config_offset.value(str(version))
         else:
-            offset = '0x1FFEE850'
+            max_key = max(key_list)
+            if max_key < version:
+                offset = self.config_offset.value(str(max_key))
+            else:
+                for index, config_key in enumerate(key_list):
+                    if config_key > version:
+                        offset = self.config_offset.value(str(key_list[index - 1]))
+                        break
         self.le_ble_addr_offset.setText(offset)
         return offset
 
@@ -273,7 +290,7 @@ class MainWindow(QMainWindow, Ui_main):
                 tempfile.close()
                 log_path = MREGE_TEMP_FILE_NAME
         except Exception as e:
-            print(repr(e))
+            LOG.error(repr(e))
         else:
             # 开始解析
             try:
@@ -287,7 +304,7 @@ class MainWindow(QMainWindow, Ui_main):
                 time.sleep(0.5)
                 self.progressBarDialog.close()
                 QMessageBox.warning(self, '提示', '失败，解析出错，请将对应日志和BIN文件发送开发者！', QMessageBox.Ok)
-                print(e)
+                LOG.error(e)
 
     def total_callBack(self, number):
         self.progressBar.setRange(0, number)
@@ -305,9 +322,6 @@ class MainWindow(QMainWindow, Ui_main):
             self.progressBar.setValue(number + 1)
 
     def analysis_progressBar_dialog(self):
-        '''
-            从服务器下载烧录文件的界面与逻辑
-        '''
         # Dialog
         self.progressBarDialog = QDialog(self, flags=Qt.FramelessWindowHint | Qt.MSWindowsFixedSizeDialogHint)
         self.progressBarDialog.resize(400, 150)
@@ -352,13 +366,12 @@ class AnalysisThread(QThread):
         except Exception as e:
             self.analysis_signal.emit(-2)
             traceback.print_exc()
-            # print(repr(e))
 
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     mainWin = MainWindow()
     mainWin.show()
-    logging.info('Version: %s' % APP_VERSION)
-    logging.info('Time: %s' % time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()))
+    LOG.info('Version: %s' % APP_VERSION)
+    LOG.info('Time: %s' % time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()))
     sys.exit(app.exec_())

@@ -480,7 +480,7 @@ def v63InfoExtraction(str, count, total):
                 ONLINE_STATE = 2
         else:
             if MATCH_STATE == 1:
-                if 'offline measure,identify fat,res:' in str:
+                if 'offline,res:' in str:
                     INFO_DATA[6] = int(str_temp[8], 16) / 10  # res
                 # if 'run_identify_flag:' in str or '':     # 1.7版本是写的这条判断语句，不知道为什么，可能写错了
                 if 'run_identify_flag:' in str:
